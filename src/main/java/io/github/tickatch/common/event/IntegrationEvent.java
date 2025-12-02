@@ -1,12 +1,14 @@
 package io.github.tickatch.common.event;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.github.tickatch.common.util.JsonUtils;
 import lombok.Builder;
 import lombok.Getter;
 
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -21,6 +23,9 @@ import java.util.UUID;
  * IntegrationEvent integrationEvent = IntegrationEvent.from(domainEvent, "ticket-service", traceId);
  *
  * rabbitTemplate.convertAndSend(exchange, integrationEvent.getRoutingKey(), integrationEvent);
+ *
+ * // 수신 측에서 payload 복원
+ * TicketCreatedEvent restored = integrationEvent.getPayloadAs(TicketCreatedEvent.class);
  * }</pre>
  *
  * @author Tickatch
@@ -54,8 +59,8 @@ public class IntegrationEvent implements Serializable {
     /** 이벤트 버전 */
     private final int version;
 
-    /** 이벤트 페이로드 */
-    private final Object payload;
+    /** 이벤트 페이로드 (JSON 문자열) */
+    private final String payload;
 
     /** 추가 메타데이터 */
     private final Map<String, String> metadata;
@@ -82,6 +87,37 @@ public class IntegrationEvent implements Serializable {
 
     /** 이벤트 만료 시간 */
     private final Instant expiresAt;
+
+    // ========================================
+    // Payload 역직렬화
+    // ========================================
+
+    /**
+     * payload를 지정된 클래스로 역직렬화
+     *
+     * @param clazz 변환할 클래스 타입
+     * @param <T> 반환 타입
+     * @return 역직렬화된 객체
+     * @throws JsonUtils.JsonConversionException 역직렬화 실패 시
+     */
+    public <T> T getPayloadAs(Class<T> clazz) {
+        return JsonUtils.fromJson(this.payload, clazz);
+    }
+
+    /**
+     * payload를 지정된 클래스로 안전하게 역직렬화
+     *
+     * @param clazz 변환할 클래스 타입
+     * @param <T> 반환 타입
+     * @return 역직렬화된 객체를 담은 Optional, 실패 시 empty
+     */
+    public <T> Optional<T> getPayloadAsSafe(Class<T> clazz) {
+        return JsonUtils.fromJsonSafe(this.payload, clazz);
+    }
+
+    // ========================================
+    // 유틸리티 메서드
+    // ========================================
 
     /**
      * 이벤트 만료 여부 확인
@@ -132,7 +168,7 @@ public class IntegrationEvent implements Serializable {
                 .occurredAt(domainEvent.getOccurredAt())
                 .sourceService(sourceService)
                 .version(domainEvent.getVersion())
-                .payload(domainEvent)
+                .payload(JsonUtils.toJson(domainEvent))
                 .aggregateId(domainEvent.getAggregateId())
                 .aggregateType(domainEvent.getAggregateType())
                 .routingKey(domainEvent.getRoutingKey())
@@ -147,7 +183,7 @@ public class IntegrationEvent implements Serializable {
                 .sourceService(sourceService)
                 .traceId(traceId)
                 .version(domainEvent.getVersion())
-                .payload(domainEvent)
+                .payload(JsonUtils.toJson(domainEvent))
                 .aggregateId(domainEvent.getAggregateId())
                 .aggregateType(domainEvent.getAggregateType())
                 .routingKey(domainEvent.getRoutingKey())
@@ -162,7 +198,7 @@ public class IntegrationEvent implements Serializable {
                 .sourceService(sourceService)
                 .traceId(traceId)
                 .version(domainEvent.getVersion())
-                .payload(domainEvent)
+                .payload(JsonUtils.toJson(domainEvent))
                 .aggregateId(domainEvent.getAggregateId())
                 .aggregateType(domainEvent.getAggregateType())
                 .routingKey(routingKey)
@@ -180,7 +216,7 @@ public class IntegrationEvent implements Serializable {
                 .occurredAt(Instant.now())
                 .sourceService(sourceService)
                 .version(1)
-                .payload(payload)
+                .payload(JsonUtils.toJson(payload))
                 .routingKey(routingKey)
                 .build();
     }
@@ -192,7 +228,7 @@ public class IntegrationEvent implements Serializable {
                 .occurredAt(Instant.now())
                 .sourceService(sourceService)
                 .version(1)
-                .payload(payload)
+                .payload(JsonUtils.toJson(payload))
                 .routingKey(routingKey)
                 .expiresAt(Instant.now().plusSeconds(ttlSeconds))
                 .build();
