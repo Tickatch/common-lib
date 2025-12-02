@@ -20,40 +20,40 @@ import java.util.Collections;
  * // 컨트롤러에서 현재 사용자 조회
  * @GetMapping("/me")
  * public UserInfo getCurrentUser(@AuthenticationPrincipal AuthenticatedUser user) {
- *     Long userId = user.getUserId();
+ *     String userId = user.getUserId();
  *     return userService.findById(userId);
  * }
  *
  * // SecurityContext에서 직접 조회
  * Authentication auth = SecurityContextHolder.getContext().getAuthentication();
  * AuthenticatedUser user = (AuthenticatedUser) auth.getPrincipal();
- * Long userId = user.getUserId();
+ * String userId = user.getUserId();
  * }</pre>
  *
- * @param userId 사용자 ID (API Gateway에서 전달된 값)
+ * @param userId 사용자 ID (API Gateway에서 전달된 UUID 문자열)
  * @author Tickatch
  * @since 0.0.1
  * @see LoginFilter
  * @see BaseSecurityConfig
  */
-public record AuthenticatedUser(Long userId) implements UserDetails {
+public record AuthenticatedUser(String userId) implements UserDetails {
 
     /**
      * {@link AuthenticatedUser} 객체를 생성하는 정적 팩토리 메서드.
      *
-     * @param userId 사용자 ID
+     * @param userId 사용자 ID (UUID 문자열)
      * @return 생성된 {@link AuthenticatedUser} 인스턴스
      */
-    public static AuthenticatedUser of(Long userId) {
+    public static AuthenticatedUser of(String userId) {
         return new AuthenticatedUser(userId);
     }
 
     /**
      * 사용자 ID를 반환한다.
      *
-     * @return 사용자 ID
+     * @return 사용자 ID (UUID 문자열)
      */
-    public Long getUserId() {
+    public String getUserId() {
         return userId;
     }
 
@@ -85,13 +85,13 @@ public record AuthenticatedUser(Long userId) implements UserDetails {
     /**
      * Spring Security가 사용하는 사용자명을 반환한다.
      *
-     * <p>사용자 ID를 문자열로 변환하여 반환한다.
+     * <p>사용자 ID를 그대로 반환한다.
      *
      * @return 사용자 ID 문자열
      */
     @Override
     public String getUsername() {
-        return String.valueOf(userId);
+        return userId;
     }
 
     /**

@@ -4,6 +4,7 @@ import io.github.tickatch.common.security.AuthenticatedUser;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.StringUtils;
 
 import java.util.Optional;
 
@@ -19,7 +20,7 @@ import java.util.Optional;
  *
  * <h2>동작 방식</h2>
  * <ul>
- *   <li>인증된 사용자가 있는 경우: {@link AuthenticatedUser#getUserId()}를 문자열로 반환</li>
+ *   <li>인증된 사용자가 있는 경우: {@link AuthenticatedUser#getUserId()}를 반환</li>
  *   <li>인증되지 않은 경우: "SYSTEM" 반환</li>
  *   <li>익명 사용자(Anonymous)인 경우: "SYSTEM" 반환</li>
  * </ul>
@@ -77,8 +78,8 @@ public class AuditorAwareImpl implements AuditorAware<String> {
 
         // AuthenticatedUser인 경우
         if (principal instanceof AuthenticatedUser authenticatedUser) {
-            Long userId = authenticatedUser.getUserId();
-            return userId != null ? String.valueOf(userId) : null;
+            String userId = authenticatedUser.getUserId();
+            return StringUtils.hasText(userId) ? userId : null;
         }
 
         // 익명 사용자 또는 기타 (anonymousUser 문자열)

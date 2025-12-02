@@ -22,12 +22,12 @@ import java.util.UUID;
  *
  * <p>처리하는 헤더:
  * <ul>
- *   <li>{@code X-User-Id} — 사용자 ID (API Gateway에서 전달)</li>
+ *   <li>{@code X-User-Id} — 사용자 ID (API Gateway에서 전달, UUID 문자열)</li>
  * </ul>
  *
  * <p>로그 출력 예시 (logback.xml 패턴 설정 시):
  * <pre>
- * 2025-01-15 10:30:00.123 [http-nio-8080-exec-1] [abc-123-def] [42] INFO  c.e.TicketController - 티켓 조회
+ * 2025-01-15 10:30:00.123 [http-nio-8080-exec-1] [abc-123-def] [550e8400-e29b-41d4-a716-446655440000] INFO  c.e.TicketController - 티켓 조회
  * </pre>
  *
  * <p>사용 방법 - 각 서비스에서 빈으로 등록:
@@ -76,7 +76,7 @@ public class MdcFilter extends OncePerRequestFilter {
             MdcUtils.setRequestId(requestId);
 
             // 헤더에서 사용자 ID 추출 및 저장
-            Long userId = extractUserId(request);
+            String userId = extractUserId(request);
             if (userId != null) {
                 MdcUtils.setUserId(userId);
             }
@@ -92,19 +92,15 @@ public class MdcFilter extends OncePerRequestFilter {
      * HTTP 헤더에서 사용자 ID를 추출한다.
      *
      * @param request HTTP 요청
-     * @return 사용자 ID, 헤더가 없거나 유효하지 않으면 null
+     * @return 사용자 ID (UUID 문자열), 헤더가 없거나 빈 문자열이면 null
      */
-    private Long extractUserId(HttpServletRequest request) {
+    private String extractUserId(HttpServletRequest request) {
         String userIdHeader = request.getHeader(HEADER_USER_ID);
 
         if (!StringUtils.hasText(userIdHeader)) {
             return null;
         }
 
-        try {
-            return Long.parseLong(userIdHeader);
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return userIdHeader;
     }
 }

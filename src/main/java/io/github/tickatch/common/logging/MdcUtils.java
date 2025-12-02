@@ -27,7 +27,7 @@ import java.util.UUID;
  * <pre>{@code
  * // 요청 시작 시
  * MdcUtils.setRequestId(UUID.randomUUID().toString());
- * MdcUtils.setUserId(123L);
+ * MdcUtils.setUserId("550e8400-e29b-41d4-a716-446655440000");
  *
  * // 로그 출력 시 자동으로 requestId, userId 포함됨
  * log.info("주문 처리 시작");
@@ -149,28 +149,26 @@ public final class MdcUtils {
     /**
      * MDC에 사용자 ID를 저장한다.
      *
-     * @param userId 사용자 ID
+     * <p>userId가 null이거나 빈 문자열인 경우 저장하지 않는다.
+     *
+     * @param userId 사용자 ID (UUID 문자열)
      */
-    public static void setUserId(Long userId) {
-        if (userId != null) {
-            put(USER_ID, String.valueOf(userId));
+    public static void setUserId(String userId) {
+        if (StringUtils.hasText(userId)) {
+            put(USER_ID, userId);
         }
     }
 
     /**
      * MDC에서 사용자 ID를 조회한다.
      *
-     * @return 사용자 ID, 없거나 형식이 올바르지 않으면 null
+     * @return 사용자 ID (UUID 문자열), 없거나 빈 문자열이면 null
      */
-    public static Long getUserId() {
+    public static String getUserId() {
         String userId = get(USER_ID);
         if (!StringUtils.hasText(userId)) {
             return null;
         }
-        try {
-            return Long.parseLong(userId);
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return userId;
     }
 }

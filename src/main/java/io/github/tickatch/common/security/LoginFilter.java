@@ -21,7 +21,7 @@ import java.io.IOException;
  *
  * <p>처리하는 헤더:
  * <ul>
- *   <li>{@code X-User-Id} — 사용자 ID (필수)</li>
+ *   <li>{@code X-User-Id} — 사용자 ID (UUID 문자열)</li>
  * </ul>
  *
  * <p>{@code X-User-Id} 헤더가 누락되었거나 유효하지 않은 경우 인증 처리는 수행되지 않으며,
@@ -96,17 +96,9 @@ public class LoginFilter extends GenericFilterBean {
      * @param request 현재 HTTP 요청
      */
     private void doLogin(HttpServletRequest request) {
-        String userIdHeader = request.getHeader(HEADER_USER_ID);
+        String userId = request.getHeader(HEADER_USER_ID);
 
-        if (!StringUtils.hasText(userIdHeader)) {
-            return;
-        }
-
-        Long userId;
-        try {
-            userId = Long.parseLong(userIdHeader);
-        } catch (NumberFormatException e) {
-            // 유효하지 않은 형식의 사용자 ID
+        if (!StringUtils.hasText(userId)) {
             return;
         }
 
