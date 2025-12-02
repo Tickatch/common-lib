@@ -1,0 +1,8 @@
+io.github.tickatch.common.autoconfig.ExceptionHandlerAutoConfiguration
+io.github.tickatch.common.autoconfig.FeignTraceAutoConfiguration
+io.github.tickatch.common.autoconfig.JpaAuditingAutoConfiguration
+io.github.tickatch.common.autoconfig.LoggingAutoConfiguration
+io.github.tickatch.common.autoconfig.MdcFilterAutoConfiguration
+io.github.tickatch.common.autoconfig.ScheduledTraceAutoConfiguration
+io.github.tickatch.common.autoconfig.SecurityAutoConfiguration
+io.github.tickatch.common.autoconfig.SwaggerAutoConfiguration
