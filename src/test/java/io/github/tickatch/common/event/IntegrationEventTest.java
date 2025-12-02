@@ -1,11 +1,13 @@
 package io.github.tickatch.common.event;
 
+import io.github.tickatch.common.util.JsonUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -39,10 +41,13 @@ class IntegrationEventTest {
             assertThat(integrationEvent.getOccurredAt()).isEqualTo(domainEvent.getOccurredAt());
             assertThat(integrationEvent.getSourceService()).isEqualTo("ticket-service");
             assertThat(integrationEvent.getVersion()).isEqualTo(domainEvent.getVersion());
-            assertThat(integrationEvent.getPayload()).isEqualTo(domainEvent);
             assertThat(integrationEvent.getAggregateId()).isEqualTo("123");
             assertThat(integrationEvent.getAggregateType()).isEqualTo("TestAggregate");
             assertThat(integrationEvent.getRoutingKey()).isEqualTo("testaggregate.TestDomainEvent");
+
+            // payload는 JSON 문자열
+            assertThat(integrationEvent.getPayload()).isInstanceOf(String.class);
+            assertThat(JsonUtils.isValidJson(integrationEvent.getPayload())).isTrue();
         }
 
         @Test
@@ -154,6 +159,82 @@ class IntegrationEventTest {
     }
 
     // ========================================
+    // getPayloadAs() 테스트
+    // ========================================
+
+    @Nested
+    @DisplayName("getPayloadAs() 테스트")
+    class GetPayloadAsTest {
+
+        @Test
+        @DisplayName("payload를 원본 클래스로 역직렬화한다")
+        void getPayloadAs_deserializesPayload() {
+            // given
+            TestDomainEvent domainEvent = new TestDomainEvent(123L, "테스트 이벤트");
+            IntegrationEvent integrationEvent = IntegrationEvent.from(domainEvent, "service");
+
+            // when
+            TestDomainEvent restored = integrationEvent.getPayloadAs(TestDomainEvent.class);
+
+            // then
+            assertThat(restored.getId()).isEqualTo(123L);
+            assertThat(restored.getName()).isEqualTo("테스트 이벤트");
+            assertThat(restored.getEventType()).isEqualTo("TestDomainEvent");
+        }
+
+        @Test
+        @DisplayName("잘못된 클래스로 역직렬화하면 예외 발생")
+        void getPayloadAs_throwsOnWrongClass() {
+            // given
+            TestDomainEvent domainEvent = new TestDomainEvent(123L, "테스트");
+            IntegrationEvent integrationEvent = IntegrationEvent.from(domainEvent, "service");
+
+            // when & then
+            assertThatThrownBy(() -> integrationEvent.getPayloadAs(AnotherDomainEvent.class))
+                    .isInstanceOf(JsonUtils.JsonConversionException.class);
+        }
+    }
+
+    // ========================================
+    // getPayloadAsSafe() 테스트
+    // ========================================
+
+    @Nested
+    @DisplayName("getPayloadAsSafe() 테스트")
+    class GetPayloadAsSafeTest {
+
+        @Test
+        @DisplayName("성공 시 Optional에 값을 담아 반환")
+        void getPayloadAsSafe_returnsOptionalWithValue() {
+            // given
+            TestDomainEvent domainEvent = new TestDomainEvent(456L, "안전한 테스트");
+            IntegrationEvent integrationEvent = IntegrationEvent.from(domainEvent, "service");
+
+            // when
+            Optional<TestDomainEvent> result = integrationEvent.getPayloadAsSafe(TestDomainEvent.class);
+
+            // then
+            assertThat(result).isPresent();
+            assertThat(result.get().getId()).isEqualTo(456L);
+            assertThat(result.get().getName()).isEqualTo("안전한 테스트");
+        }
+
+        @Test
+        @DisplayName("실패 시 빈 Optional 반환")
+        void getPayloadAsSafe_returnsEmptyOnFailure() {
+            // given
+            TestDomainEvent domainEvent = new TestDomainEvent(123L, "테스트");
+            IntegrationEvent integrationEvent = IntegrationEvent.from(domainEvent, "service");
+
+            // when
+            Optional<AnotherDomainEvent> result = integrationEvent.getPayloadAsSafe(AnotherDomainEvent.class);
+
+            // then
+            assertThat(result).isEmpty();
+        }
+    }
+
+    // ========================================
     // create() 테스트
     // ========================================
 
@@ -167,7 +248,7 @@ class IntegrationEventTest {
             // given
             String eventType = "CustomEvent";
             String sourceService = "my-service";
-            Object payload = Map.of("key", "value");
+            Map<String, String> payload = Map.of("key", "value");
             String routingKey = "custom.route";
 
             // when
@@ -177,9 +258,11 @@ class IntegrationEventTest {
             assertThat(event.getEventId()).isNotNull();
             assertThat(event.getEventType()).isEqualTo(eventType);
             assertThat(event.getSourceService()).isEqualTo(sourceService);
-            assertThat(event.getPayload()).isEqualTo(payload);
             assertThat(event.getRoutingKey()).isEqualTo(routingKey);
             assertThat(event.getVersion()).isEqualTo(1);
+
+            // payload가 JSON 문자열로 저장됨
+            assertThat(event.getPayload()).isEqualTo("{\"key\":\"value\"}");
         }
 
         @Test
@@ -229,15 +312,19 @@ class IntegrationEventTest {
         @Test
         @DisplayName("다른 필드들도 올바르게 설정된다")
         void createWithTtl_setsOtherFields() {
+            // given
+            Map<String, Object> data = Map.of("id", 1, "name", "test");
+
             // when
             IntegrationEvent event = IntegrationEvent.createWithTtl(
-                    "MyEvent", "my-service", "data", "my.route", 120
+                    "MyEvent", "my-service", data, "my.route", 120
             );
 
             // then
             assertThat(event.getEventType()).isEqualTo("MyEvent");
             assertThat(event.getSourceService()).isEqualTo("my-service");
-            assertThat(event.getPayload()).isEqualTo("data");
+            assertThat(event.getPayload()).contains("\"id\":1");
+            assertThat(event.getPayload()).contains("\"name\":\"test\"");
             assertThat(event.getRoutingKey()).isEqualTo("my.route");
             assertThat(event.getVersion()).isEqualTo(1);
         }
@@ -280,6 +367,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .expiresAt(Instant.now().minusSeconds(60))
                     .build();
 
@@ -305,6 +393,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .retryCount(2)
                     .maxRetries(3)
                     .build();
@@ -322,6 +411,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .retryCount(3)
                     .maxRetries(3)
                     .build();
@@ -339,6 +429,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .retryCount(0)
                     .maxRetries(3)
                     .expiresAt(Instant.now().minusSeconds(60))
@@ -366,6 +457,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .retryCount(1)
                     .maxRetries(5)
                     .build();
@@ -382,6 +474,7 @@ class IntegrationEventTest {
         void retry_preservesOtherFields() {
             // given
             Instant occurredAt = Instant.now();
+            String payloadJson = "{\"key\":\"value\"}";
             IntegrationEvent original = IntegrationEvent.builder()
                     .eventId("original-id")
                     .eventType("OriginalType")
@@ -390,7 +483,7 @@ class IntegrationEventTest {
                     .traceId("trace-123")
                     .spanId("span-456")
                     .version(2)
-                    .payload("original-payload")
+                    .payload(payloadJson)
                     .metadata(Map.of("key", "value"))
                     .aggregateId("agg-789")
                     .aggregateType("AggType")
@@ -412,7 +505,7 @@ class IntegrationEventTest {
             assertThat(retried.getTraceId()).isEqualTo("trace-123");
             assertThat(retried.getSpanId()).isEqualTo("span-456");
             assertThat(retried.getVersion()).isEqualTo(2);
-            assertThat(retried.getPayload()).isEqualTo("original-payload");
+            assertThat(retried.getPayload()).isEqualTo(payloadJson);
             assertThat(retried.getMetadata()).containsEntry("key", "value");
             assertThat(retried.getAggregateId()).isEqualTo("agg-789");
             assertThat(retried.getAggregateType()).isEqualTo("AggType");
@@ -432,6 +525,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .retryCount(0)
                     .build();
 
@@ -462,6 +556,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .build();
 
             // then
@@ -477,6 +572,7 @@ class IntegrationEventTest {
                     .eventType("Type")
                     .occurredAt(Instant.now())
                     .sourceService("service")
+                    .payload("{}")
                     .build();
 
             // then
@@ -512,22 +608,30 @@ class IntegrationEventTest {
     class ScenarioTest {
 
         @Test
-        @DisplayName("DomainEvent -> IntegrationEvent 변환 후 RabbitMQ 전송 시나리오")
-        void rabbitMqScenario() {
-            // given
+        @DisplayName("DomainEvent -> IntegrationEvent 변환 후 payload 복원 시나리오")
+        void fullConversionScenario() {
+            // given - 발신 측
             TestDomainEvent domainEvent = new TestDomainEvent(123L, "콘서트 티켓 예매");
             String traceId = UUID.randomUUID().toString();
 
-            // when
+            // when - IntegrationEvent 생성 (발신)
             IntegrationEvent integrationEvent = IntegrationEvent.from(
                     domainEvent, "ticket-service", traceId
             );
 
-            // then
+            // then - 메타데이터 확인
             assertThat(integrationEvent.getSourceService()).isEqualTo("ticket-service");
             assertThat(integrationEvent.getTraceId()).isEqualTo(traceId);
             assertThat(integrationEvent.getRoutingKey()).isEqualTo("testaggregate.TestDomainEvent");
-            assertThat(integrationEvent.getPayload()).isInstanceOf(TestDomainEvent.class);
+            assertThat(integrationEvent.getPayload()).isInstanceOf(String.class);
+
+            // when - payload 복원 (수신 측)
+            TestDomainEvent restored = integrationEvent.getPayloadAs(TestDomainEvent.class);
+
+            // then - 원본 데이터 복원 확인
+            assertThat(restored.getId()).isEqualTo(123L);
+            assertThat(restored.getName()).isEqualTo("콘서트 티켓 예매");
+            assertThat(restored.getEventType()).isEqualTo("TestDomainEvent");
         }
 
         @Test
@@ -539,6 +643,7 @@ class IntegrationEventTest {
                     .eventType("OrderCreated")
                     .occurredAt(Instant.now())
                     .sourceService("order-service")
+                    .payload("{\"orderId\":1}")
                     .maxRetries(3)
                     .build();
 
@@ -564,6 +669,7 @@ class IntegrationEventTest {
                     .eventType("ExpiredEvent")
                     .occurredAt(Instant.now().minusSeconds(120))
                     .sourceService("service")
+                    .payload("{}")
                     .expiresAt(Instant.now().minusSeconds(60))
                     .build();
 
@@ -578,6 +684,30 @@ class IntegrationEventTest {
             assertThat(validEvent.isExpired()).isFalse();
             assertThat(validEvent.canRetry()).isTrue();
         }
+
+        @Test
+        @DisplayName("RabbitMQ 송수신 시뮬레이션")
+        void rabbitMqSimulationScenario() {
+            // given - 발신 측에서 이벤트 생성
+            TestDomainEvent domainEvent = new TestDomainEvent(999L, "RabbitMQ 테스트");
+            IntegrationEvent sent = IntegrationEvent.from(domainEvent, "sender-service", "trace-001");
+
+            // when - JSON으로 직렬화 (RabbitMQ 전송 시뮬레이션)
+            String json = JsonUtils.toJson(sent);
+
+            // then - JSON에서 역직렬화 (RabbitMQ 수신 시뮬레이션)
+            IntegrationEvent received = JsonUtils.fromJson(json, IntegrationEvent.class);
+
+            assertThat(received.getEventId()).isEqualTo(sent.getEventId());
+            assertThat(received.getEventType()).isEqualTo("TestDomainEvent");
+            assertThat(received.getSourceService()).isEqualTo("sender-service");
+            assertThat(received.getTraceId()).isEqualTo("trace-001");
+
+            // payload 복원
+            TestDomainEvent restoredPayload = received.getPayloadAs(TestDomainEvent.class);
+            assertThat(restoredPayload.getId()).isEqualTo(999L);
+            assertThat(restoredPayload.getName()).isEqualTo("RabbitMQ 테스트");
+        }
     }
 
     // ========================================
@@ -587,6 +717,13 @@ class IntegrationEventTest {
     static class TestDomainEvent extends DomainEvent {
         private final Long id;
         private final String name;
+
+        // 기본 생성자 (Jackson 역직렬화용)
+        TestDomainEvent() {
+            super();
+            this.id = null;
+            this.name = null;
+        }
 
         TestDomainEvent(Long id, String name) {
             super();
@@ -610,6 +747,20 @@ class IntegrationEventTest {
 
         public String getName() {
             return name;
+        }
+    }
+
+    // 역직렬화 실패 테스트용
+    static class AnotherDomainEvent extends DomainEvent {
+        private final String differentField;
+
+        AnotherDomainEvent(String differentField) {
+            super();
+            this.differentField = differentField;
+        }
+
+        public String getDifferentField() {
+            return differentField;
         }
     }
 }
