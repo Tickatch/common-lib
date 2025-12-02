@@ -70,7 +70,7 @@ dependencies {
     // ========================================
     // Servlet API
     // ========================================
-    compileOnly 'jakarta.servlet:jakarta.servlet-api'
+    api 'jakarta.servlet:jakarta.servlet-api'
 
     // ========================================
     // Lombok
