@@ -1,7 +1,7 @@
 # Tickatch Common Library
 
 Tickatch MSA 프로젝트를 위한 공통 라이브러리입니다.  
-Spring Boot 3.x 기반의 API 응답 표준화, 예외 처리, 인증/인가, 로깅, 이벤트 등을 제공합니다.
+Spring Boot 3.x 기반의 API 응답 표준화, 예외 처리, 인증/인가, 로깅, 분산 추적, 이벤트 등을 제공합니다.
 
 ## 📋 목차
 
@@ -13,6 +13,7 @@ Spring Boot 3.x 기반의 API 응답 표준화, 예외 처리, 인증/인가, �
     - [API 응답](#api-응답)
     - [예외 처리](#예외-처리)
     - [인증/인가](#인증인가)
+    - [분산 추적](#분산-추적)
     - [로깅](#로깅)
     - [JPA Auditing](#jpa-auditing)
     - [이벤트](#이벤트)
@@ -58,6 +59,7 @@ dependencies {
 | **API 응답 표준화** | 일관된 응답 포맷 (`ApiResponse`, `PageResponse`) |
 | **전역 예외 처리** | `@RestControllerAdvice` 기반 통합 예외 핸들링 |
 | **인증/인가** | X-User-Id 헤더 기반 인증, Spring Security 통합 |
+| **분산 추적** | traceId 자동 생성/전파 (HTTP, Feign, RabbitMQ, Scheduler) |
 | **요청 추적 로깅** | MDC 기반 requestId/userId 추적, AOP 자동 로깅 |
 | **JPA Auditing** | createdBy, updatedBy 자동 설정 |
 | **이벤트** | RabbitMQ용 도메인/통합 이벤트 |
@@ -106,6 +108,9 @@ io.github.tickatch.common/
 │   └── PageInfo.java
 ├── autoconfig/    # Spring Boot AutoConfiguration
 │   ├── SecurityAutoConfiguration.java
+│   ├── MdcFilterAutoConfiguration.java
+│   ├── FeignTraceAutoConfiguration.java
+│   ├── ScheduledTraceAutoConfiguration.java
 │   ├── LoggingAutoConfiguration.java
 │   ├── ExceptionHandlerAutoConfiguration.java
 │   ├── JpaAuditingAutoConfiguration.java
@@ -120,7 +125,8 @@ io.github.tickatch.common/
 │   └── ValidationErrorParser.java
 ├── event/         # 이벤트
 │   ├── DomainEvent.java
-│   └── IntegrationEvent.java
+│   ├── IntegrationEvent.java
+│   └── EventContext.java
 ├── jpa/           # JPA 지원
 │   └── AuditorAwareImpl.java
 ├── logging/       # 로깅
@@ -394,6 +400,134 @@ AutoConfiguration이 기본으로 허용하는 경로:
 
 ---
 
+### 분산 추적
+
+MSA 환경에서 여러 서비스를 거치는 요청의 전체 흐름을 추적할 수 있습니다.
+
+> 상세 가이드: [DISTRIBUTED_TRACING.md](./DISTRIBUTED_TRACING.md)
+
+#### 핵심 개념
+
+```
+traceId: 전체 요청 흐름을 식별하는 고유 ID (UUID)
+         하나의 사용자 요청이 여러 서비스를 거쳐도 동일한 traceId 유지
+```
+
+#### 트리거별 자동화
+
+| 트리거 | 담당 컴포넌트 | 동작 |
+|--------|-------------|------|
+| HTTP 요청 (최초) | `MdcFilter` | 새 traceId 생성 |
+| HTTP 요청 (전파) | `MdcFilter` | X-Trace-Id 헤더에서 수신 |
+| Feign 호출 | `FeignTraceAutoConfiguration` | X-Trace-Id 헤더로 자동 전파 |
+| 이벤트 발행 | `IntegrationEvent.from()` | MDC에서 traceId 자동 추출 |
+| 이벤트 수신 | `EventContext.run()` | 이벤트에서 traceId 복원 **(수동 호출)** |
+| @Scheduled | `ScheduledTraceAutoConfiguration` | 새 traceId 자동 생성 |
+| 배치/수동 | `EventContext.runWithNewTrace()` | 새 traceId 생성 **(수동 호출)** |
+
+#### 전체 흐름
+
+```
+[Client]
+    │ POST /orders
+    ▼
+┌─────────────┐     Feign (자동)      ┌─────────────┐
+│   Order     │ ──────────────────▶   │  Payment    │
+│   Service   │  X-Trace-Id: abc-123  │   Service   │
+└─────────────┘                       └─────────────┘
+    │
+    │ RabbitMQ (자동)
+    │ traceId: abc-123
+    ▼
+┌─────────────┐
+│   Ticket    │
+│   Service   │
+└─────────────┘
+
+모든 서비스 로그: [abc-123] ...
+```
+
+#### 사용 예시
+
+**HTTP 요청 처리 (자동)**
+
+```java
+@PostMapping("/orders")
+public OrderResponse createOrder(@RequestBody OrderRequest request) {
+    // MdcFilter가 이미 traceId 설정 완료
+    log.info("주문 생성");  // [abc-123] 주문 생성
+    
+    // Feign 호출 - traceId 자동 전파
+    paymentClient.process(request.getPaymentInfo());
+    
+    // 이벤트 발행 - traceId 자동 포함
+    IntegrationEvent event = IntegrationEvent.from(domainEvent, "order-service");
+    rabbitTemplate.convertAndSend(exchange, event.getRoutingKey(), event);
+    
+    return OrderResponse.success(order);
+}
+```
+
+**이벤트 수신 (수동 호출 필요)**
+
+```java
+@RabbitListener(queues = "order.created.queue")
+public void handleOrderCreated(IntegrationEvent event) {
+    // ✅ EventContext.run()으로 MDC 복원
+    EventContext.run(event, e -> {
+        OrderCreatedEvent payload = e.getPayloadAs(OrderCreatedEvent.class);
+        log.info("주문 이벤트 수신");  // [abc-123] 주문 이벤트 수신
+        
+        // 새 이벤트 발행 시 같은 traceId 자동 유지
+        IntegrationEvent newEvent = IntegrationEvent.from(newDomainEvent, "payment-service");
+        rabbitTemplate.convertAndSend(exchange, newEvent.getRoutingKey(), newEvent);
+    });
+}
+```
+
+**스케줄러 (자동)**
+
+```java
+@Scheduled(cron = "0 0 2 * * *")
+public void dailyReport() {
+    // ScheduledTraceAutoConfiguration이 자동으로 traceId 생성
+    log.info("리포트 생성 시작");  // [sched-xxx-xxx] 리포트 생성 시작
+    
+    // Feign 호출, 이벤트 발행 모두 추적 가능
+    reportClient.fetchData();
+}
+```
+
+**배치/수동 작업**
+
+```java
+public void processBatch() {
+    // 명시적으로 새 traceId 생성
+    EventContext.runWithNewTrace(() -> {
+        log.info("배치 처리 시작");  // [batch-xxx-xxx] 배치 처리 시작
+        externalClient.call();
+    });
+}
+
+// 반환값이 필요한 경우
+public int processBatchWithResult() {
+    return EventContext.executeWithNewTrace(() -> {
+        return processItems();
+    });
+}
+```
+
+#### EventContext API
+
+| 메서드 | 용도 | 반환값 |
+|--------|------|--------|
+| `run(event, Consumer)` | 이벤트 처리 | void |
+| `execute(event, Function)` | 이벤트 처리 (반환값) | R |
+| `runWithNewTrace(Runnable)` | 새 traceId로 실행 | void |
+| `executeWithNewTrace(Supplier)` | 새 traceId로 실행 (반환값) | R |
+
+---
+
 ### 로깅
 
 #### logback.xml 설정
@@ -440,15 +574,25 @@ public class PaymentService {
 #### MdcUtils 직접 사용
 
 ```java
-// 현재 요청 ID 조회
+// 현재 요청 ID (traceId) 조회
 String requestId = MdcUtils.getRequestId();
 
+// 요청 ID 존재 여부 확인
+boolean hasId = MdcUtils.hasRequestId();
+
+// 없으면 새로 생성
+String id = MdcUtils.getOrCreateRequestId();
+
 // 현재 사용자 ID 조회
-Long userId = MdcUtils.getUserId();
+String userId = MdcUtils.getUserId();
+boolean hasUser = MdcUtils.hasUserId();
 
 // 커스텀 값 저장
 MdcUtils.put("orderId", orderId);
 String orderId = MdcUtils.get("orderId");
+
+// MDC 정리
+MdcUtils.clear();
 ```
 
 ---
@@ -543,11 +687,8 @@ public class TicketService {
         );
         
         // 통합 이벤트로 래핑하여 발행
-        IntegrationEvent event = IntegrationEvent.from(
-            domainEvent, 
-            "ticket-service",
-            MdcUtils.getRequestId()
-        );
+        // ✅ traceId는 MDC에서 자동 추출됨 (명시적 전달 불필요)
+        IntegrationEvent event = IntegrationEvent.from(domainEvent, "ticket-service");
         
         rabbitTemplate.convertAndSend("ticket.exchange", event.getRoutingKey(), event);
         
@@ -556,9 +697,48 @@ public class TicketService {
 }
 ```
 
+#### 이벤트 수신
+
+```java
+@Component
+@RequiredArgsConstructor
+public class TicketEventListener {
+
+    @RabbitListener(queues = "ticket.created.queue")
+    public void handleTicketCreated(IntegrationEvent event) {
+        // ✅ EventContext.run()으로 traceId 복원 필수!
+        EventContext.run(event, e -> {
+            TicketCreatedEvent payload = e.getPayloadAs(TicketCreatedEvent.class);
+            log.info("티켓 생성 이벤트 수신: ticketId={}", payload.getTicketId());
+            
+            // 후속 처리...
+            
+            // 새 이벤트 발행 시 같은 traceId 자동 유지
+            IntegrationEvent newEvent = IntegrationEvent.from(
+                new NotificationEvent(payload.getTicketId()),
+                "notification-service"
+            );
+            rabbitTemplate.convertAndSend(exchange, newEvent.getRoutingKey(), newEvent);
+        });
+    }
+    
+    // 반환값이 필요한 경우
+    @RabbitListener(queues = "ticket.query.queue")
+    public String handleTicketQuery(IntegrationEvent event) {
+        return EventContext.execute(event, e -> {
+            TicketQueryEvent payload = e.getPayloadAs(TicketQueryEvent.class);
+            return ticketService.getStatus(payload.getTicketId());
+        });
+    }
+}
+```
+
 #### IntegrationEvent 기능
 
 ```java
+// 명시적 traceId 지정 (MDC 대신)
+IntegrationEvent event = IntegrationEvent.from(domainEvent, "service", "custom-trace-id");
+
 // TTL 설정
 IntegrationEvent event = IntegrationEvent.createWithTtl(
     "TicketCreated", 
@@ -675,13 +855,16 @@ String prefix = UuidUtils.extractPrefix("TKT-a1b2c3d4");  // "TKT"
 
 의존성 추가만으로 자동 활성화되는 기능들:
 
-| AutoConfiguration | 등록되는 빈 | 비활성화 조건 |
-|-------------------|------------|--------------|
-| `SecurityAutoConfiguration` | `LoginFilter`, `SecurityFilterChain` | 직접 `SecurityFilterChain` 빈 정의 |
-| `LoggingAutoConfiguration` | `MdcFilter`, `LoggingAspect`, `LogManager` | `tickatch.logging.enabled=false` |
-| `ExceptionHandlerAutoConfiguration` | `GlobalExceptionHandler`, `MessageResolver` | 직접 `@RestControllerAdvice` 정의 |
-| `JpaAuditingAutoConfiguration` | `AuditorAware`, `@EnableJpaAuditing` | `tickatch.jpa.auditing.enabled=false` |
-| `SwaggerAutoConfiguration` | `SwaggerConfig`, `OpenAPI` | `tickatch.swagger.enabled=false` |
+| AutoConfiguration | 조건 | 등록되는 빈 | 비활성화 조건 |
+|-------------------|------|------------|--------------|
+| `SecurityAutoConfiguration` | spring-security 존재 | `LoginFilter`, `SecurityFilterChain` | 직접 `SecurityFilterChain` 빈 정의 |
+| `MdcFilterAutoConfiguration` | Servlet 웹앱 | `MdcFilter` | 직접 `MdcFilter` 빈 정의 |
+| `FeignTraceAutoConfiguration` | spring-cloud-openfeign 존재 | `RequestInterceptor` | - |
+| `ScheduledTraceAutoConfiguration` | spring-aop 존재 | `ScheduledTraceAspect` | - |
+| `LoggingAutoConfiguration` | Servlet 웹앱 | `LoggingAspect`, `LogManager` | `tickatch.logging.enabled=false` |
+| `ExceptionHandlerAutoConfiguration` | Servlet 웹앱 | `GlobalExceptionHandler`, `MessageResolver` | 직접 `@RestControllerAdvice` 정의 |
+| `JpaAuditingAutoConfiguration` | spring-data-jpa 존재 | `AuditorAware`, `@EnableJpaAuditing` | `tickatch.jpa.auditing.enabled=false` |
+| `SwaggerAutoConfiguration` | springdoc-openapi 존재 | `SwaggerConfig`, `OpenAPI` | `tickatch.swagger.enabled=false` |
 
 ---
 
@@ -807,5 +990,3 @@ public class SecurityConfig extends BaseSecurityConfig {
     }
 }
 ```
-
-
