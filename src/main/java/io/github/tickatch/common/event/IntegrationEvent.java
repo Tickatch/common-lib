@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.tickatch.common.util.JsonUtils;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -33,6 +34,7 @@ import java.util.UUID;
  */
 @Getter
 @Builder
+@Jacksonized
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class IntegrationEvent implements Serializable {
 
