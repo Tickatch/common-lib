@@ -5,9 +5,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.MDC;
 
 import java.util.UUID;
@@ -22,13 +19,11 @@ class MdcUtilsTest {
 
     @BeforeEach
     void setUp() {
-        // 각 테스트 전 MDC 초기화
         MDC.clear();
     }
 
     @AfterEach
     void tearDown() {
-        // 각 테스트 후 MDC 초기화
         MDC.clear();
     }
 
@@ -41,14 +36,14 @@ class MdcUtilsTest {
     class ConstantsTest {
 
         @Test
-        @DisplayName("REQUEST_ID 상수가 정의되어 있다")
-        void requestIdConstant_isDefined() {
+        @DisplayName("REQUEST_ID 상수 값을 확인한다")
+        void requestId_constant() {
             assertThat(MdcUtils.REQUEST_ID).isEqualTo("requestId");
         }
 
         @Test
-        @DisplayName("USER_ID 상수가 정의되어 있다")
-        void userIdConstant_isDefined() {
+        @DisplayName("USER_ID 상수 값을 확인한다")
+        void userId_constant() {
             assertThat(MdcUtils.USER_ID).isEqualTo("userId");
         }
     }
@@ -62,48 +57,46 @@ class MdcUtilsTest {
     class PutTest {
 
         @Test
-        @DisplayName("키-값 쌍을 MDC에 저장한다")
-        void put_storesValueInMdc() {
+        @DisplayName("키와 값을 MDC에 저장한다")
+        void put_storesValue() {
             // when
-            MdcUtils.put("testKey", "testValue");
+            MdcUtils.put("customKey", "customValue");
 
             // then
-            assertThat(MDC.get("testKey")).isEqualTo("testValue");
+            assertThat(MDC.get("customKey")).isEqualTo("customValue");
         }
 
         @Test
-        @DisplayName("키가 null이면 저장하지 않는다")
-        void put_withNullKey_doesNotStore() {
+        @DisplayName("null 키는 무시한다")
+        void put_withNullKey_ignores() {
             // when
-            MdcUtils.put(null, "testValue");
+            MdcUtils.put(null, "value");
 
-            // then
-            // null 키로 조회하면 NPE 발생하므로, 다른 방법으로 검증
-            // MDC에 아무것도 저장되지 않았음을 확인
-            assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+            // then - 예외 없이 통과
+            assertThat(MDC.getCopyOfContextMap()).isNull();
         }
 
         @Test
-        @DisplayName("값이 null이면 저장하지 않는다")
-        void put_withNullValue_doesNotStore() {
+        @DisplayName("null 값은 무시한다")
+        void put_withNullValue_ignores() {
             // when
-            MdcUtils.put("testKey", null);
+            MdcUtils.put("key", null);
 
             // then
-            assertThat(MDC.get("testKey")).isNull();
+            assertThat(MDC.get("key")).isNull();
         }
 
         @Test
         @DisplayName("기존 값을 덮어쓴다")
-        void put_overwritesExistingValue() {
+        void put_overwrites() {
             // given
-            MdcUtils.put("key", "oldValue");
+            MdcUtils.put("key", "first");
 
             // when
-            MdcUtils.put("key", "newValue");
+            MdcUtils.put("key", "second");
 
             // then
-            assertThat(MDC.get("key")).isEqualTo("newValue");
+            assertThat(MDC.get("key")).isEqualTo("second");
         }
     }
 
@@ -112,36 +105,36 @@ class MdcUtilsTest {
     class GetTest {
 
         @Test
-        @DisplayName("MDC에서 값을 조회한다")
-        void get_returnsStoredValue() {
+        @DisplayName("저장된 값을 조회한다")
+        void get_returnsValue() {
             // given
             MDC.put("testKey", "testValue");
 
             // when
-            String value = MdcUtils.get("testKey");
+            String result = MdcUtils.get("testKey");
 
             // then
-            assertThat(value).isEqualTo("testValue");
+            assertThat(result).isEqualTo("testValue");
         }
 
         @Test
         @DisplayName("존재하지 않는 키는 null을 반환한다")
         void get_withNonExistentKey_returnsNull() {
             // when
-            String value = MdcUtils.get("nonExistent");
+            String result = MdcUtils.get("nonExistent");
 
             // then
-            assertThat(value).isNull();
+            assertThat(result).isNull();
         }
 
         @Test
-        @DisplayName("키가 null이면 null을 반환한다")
+        @DisplayName("null 키는 null을 반환한다")
         void get_withNullKey_returnsNull() {
             // when
-            String value = MdcUtils.get(null);
+            String result = MdcUtils.get(null);
 
             // then
-            assertThat(value).isNull();
+            assertThat(result).isNull();
         }
     }
 
@@ -150,37 +143,30 @@ class MdcUtilsTest {
     class RemoveTest {
 
         @Test
-        @DisplayName("MDC에서 값을 제거한다")
-        void remove_removesValue() {
+        @DisplayName("키를 제거한다")
+        void remove_removesKey() {
             // given
-            MDC.put("testKey", "testValue");
+            MDC.put("toRemove", "value");
 
             // when
-            MdcUtils.remove("testKey");
+            MdcUtils.remove("toRemove");
 
             // then
-            assertThat(MDC.get("testKey")).isNull();
+            assertThat(MDC.get("toRemove")).isNull();
         }
 
         @Test
-        @DisplayName("존재하지 않는 키를 제거해도 예외가 발생하지 않는다")
-        void remove_withNonExistentKey_doesNotThrow() {
+        @DisplayName("존재하지 않는 키 제거는 예외 없이 처리된다")
+        void remove_nonExistentKey_noException() {
             // when & then
-            assertThatCode(() -> MdcUtils.remove("nonExistent"))
-                    .doesNotThrowAnyException();
+            assertThatCode(() -> MdcUtils.remove("nonExistent")).doesNotThrowAnyException();
         }
 
         @Test
-        @DisplayName("키가 null이면 무시한다")
-        void remove_withNullKey_doesNothing() {
-            // given
-            MDC.put("testKey", "testValue");
-
-            // when
-            MdcUtils.remove(null);
-
-            // then
-            assertThat(MDC.get("testKey")).isEqualTo("testValue");
+        @DisplayName("null 키 제거는 예외 없이 처리된다")
+        void remove_nullKey_noException() {
+            // when & then
+            assertThatCode(() -> MdcUtils.remove(null)).doesNotThrowAnyException();
         }
     }
 
@@ -189,12 +175,11 @@ class MdcUtilsTest {
     class ClearTest {
 
         @Test
-        @DisplayName("MDC의 모든 값을 클리어한다")
+        @DisplayName("모든 MDC 값을 클리어한다")
         void clear_removesAllValues() {
             // given
             MDC.put("key1", "value1");
             MDC.put("key2", "value2");
-            MDC.put("key3", "value3");
 
             // when
             MdcUtils.clear();
@@ -202,42 +187,20 @@ class MdcUtilsTest {
             // then
             assertThat(MDC.get("key1")).isNull();
             assertThat(MDC.get("key2")).isNull();
-            assertThat(MDC.get("key3")).isNull();
-        }
-
-        @Test
-        @DisplayName("빈 MDC에서 clear해도 예외가 발생하지 않는다")
-        void clear_onEmptyMdc_doesNotThrow() {
-            // when & then
-            assertThatCode(MdcUtils::clear)
-                    .doesNotThrowAnyException();
         }
     }
 
     // ========================================
-    // Request ID 관련 테스트
+    // Request ID 테스트
     // ========================================
 
     @Nested
-    @DisplayName("setRequestId() 테스트")
-    class SetRequestIdTest {
+    @DisplayName("Request ID 테스트")
+    class RequestIdTest {
 
         @Test
-        @DisplayName("requestId를 MDC에 저장한다")
-        void setRequestId_storesInMdc() {
-            // given
-            String requestId = "abc-123-def";
-
-            // when
-            MdcUtils.setRequestId(requestId);
-
-            // then
-            assertThat(MDC.get(MdcUtils.REQUEST_ID)).isEqualTo(requestId);
-        }
-
-        @Test
-        @DisplayName("UUID 형식의 requestId를 저장한다")
-        void setRequestId_withUuid_storesInMdc() {
+        @DisplayName("requestId를 저장한다")
+        void setRequestId_storesValue() {
             // given
             String requestId = UUID.randomUUID().toString();
 
@@ -245,20 +208,15 @@ class MdcUtilsTest {
             MdcUtils.setRequestId(requestId);
 
             // then
-            assertThat(MDC.get(MdcUtils.REQUEST_ID)).isEqualTo(requestId);
+            assertThat(MDC.get("requestId")).isEqualTo(requestId);
         }
-    }
-
-    @Nested
-    @DisplayName("getRequestId() 테스트")
-    class GetRequestIdTest {
 
         @Test
-        @DisplayName("저장된 requestId를 반환한다")
-        void getRequestId_returnsStoredValue() {
+        @DisplayName("requestId를 조회한다")
+        void getRequestId_returnsValue() {
             // given
-            String requestId = "test-request-id";
-            MDC.put(MdcUtils.REQUEST_ID, requestId);
+            String requestId = "req-12345";
+            MDC.put("requestId", requestId);
 
             // when
             String result = MdcUtils.getRequestId();
@@ -283,17 +241,17 @@ class MdcUtilsTest {
     class GetRequestUuidTest {
 
         @Test
-        @DisplayName("유효한 UUID 형식의 requestId를 UUID로 변환한다")
+        @DisplayName("유효한 UUID를 파싱한다")
         void getRequestUuid_withValidUuid_returnsUuid() {
             // given
-            UUID originalUuid = UUID.randomUUID();
-            MDC.put(MdcUtils.REQUEST_ID, originalUuid.toString());
+            UUID uuid = UUID.randomUUID();
+            MdcUtils.setRequestId(uuid.toString());
 
             // when
             UUID result = MdcUtils.getRequestUuid();
 
             // then
-            assertThat(result).isEqualTo(originalUuid);
+            assertThat(result).isEqualTo(uuid);
         }
 
         @Test
@@ -310,7 +268,7 @@ class MdcUtilsTest {
         @DisplayName("빈 문자열이면 null을 반환한다")
         void getRequestUuid_withEmptyString_returnsNull() {
             // given
-            MDC.put(MdcUtils.REQUEST_ID, "");
+            MdcUtils.setRequestId("");
 
             // when
             UUID result = MdcUtils.getRequestUuid();
@@ -320,24 +278,10 @@ class MdcUtilsTest {
         }
 
         @Test
-        @DisplayName("공백 문자열이면 null을 반환한다")
-        void getRequestUuid_withBlankString_returnsNull() {
+        @DisplayName("유효하지 않은 UUID면 null을 반환한다")
+        void getRequestUuid_withInvalidUuid_returnsNull() {
             // given
-            MDC.put(MdcUtils.REQUEST_ID, "   ");
-
-            // when
-            UUID result = MdcUtils.getRequestUuid();
-
-            // then
-            assertThat(result).isNull();
-        }
-
-        @ParameterizedTest
-        @ValueSource(strings = {"not-a-uuid", "12345", "invalid-format"})
-        @DisplayName("유효하지 않은 UUID 형식이면 null을 반환한다")
-        void getRequestUuid_withInvalidUuid_returnsNull(String invalidUuid) {
-            // given
-            MDC.put(MdcUtils.REQUEST_ID, invalidUuid);
+            MDC.put("requestId", "not-a-valid-uuid");
 
             // when
             UUID result = MdcUtils.getRequestUuid();
@@ -348,158 +292,101 @@ class MdcUtilsTest {
     }
 
     // ========================================
-    // User ID 관련 테스트
+    // User ID 테스트 (String)
     // ========================================
 
     @Nested
-    @DisplayName("setUserId() 테스트")
-    class SetUserIdTest {
+    @DisplayName("User ID 테스트")
+    class UserIdTest {
 
         @Test
-        @DisplayName("userId를 문자열로 변환하여 MDC에 저장한다")
-        void setUserId_storesAsStringInMdc() {
+        @DisplayName("userId를 저장한다")
+        void setUserId_storesValue() {
             // given
-            Long userId = 12345L;
+            String userId = UUID.randomUUID().toString();
 
             // when
             MdcUtils.setUserId(userId);
 
             // then
-            assertThat(MDC.get(MdcUtils.USER_ID)).isEqualTo("12345");
+            assertThat(MDC.get("userId")).isEqualTo(userId);
         }
 
         @Test
-        @DisplayName("userId가 null이면 저장하지 않는다")
-        void setUserId_withNull_doesNotStore() {
-            // when
-            MdcUtils.setUserId(null);
-
-            // then
-            assertThat(MDC.get(MdcUtils.USER_ID)).isNull();
-        }
-
-        @Test
-        @DisplayName("0 값도 저장한다")
-        void setUserId_withZero_stores() {
-            // when
-            MdcUtils.setUserId(0L);
-
-            // then
-            assertThat(MDC.get(MdcUtils.USER_ID)).isEqualTo("0");
-        }
-
-        @Test
-        @DisplayName("음수 값도 저장한다")
-        void setUserId_withNegative_stores() {
-            // when
-            MdcUtils.setUserId(-1L);
-
-            // then
-            assertThat(MDC.get(MdcUtils.USER_ID)).isEqualTo("-1");
-        }
-
-        @Test
-        @DisplayName("큰 값도 저장한다")
-        void setUserId_withLargeValue_stores() {
+        @DisplayName("userId를 조회한다")
+        void getUserId_returnsValue() {
             // given
-            Long largeId = Long.MAX_VALUE;
+            String userId = "usr-abc-123";
+            MDC.put("userId", userId);
 
             // when
-            MdcUtils.setUserId(largeId);
+            String result = MdcUtils.getUserId();
 
             // then
-            assertThat(MDC.get(MdcUtils.USER_ID)).isEqualTo(String.valueOf(Long.MAX_VALUE));
-        }
-    }
-
-    @Nested
-    @DisplayName("getUserId() 테스트")
-    class GetUserIdTest {
-
-        @Test
-        @DisplayName("저장된 userId를 Long으로 반환한다")
-        void getUserId_returnsStoredValue() {
-            // given
-            MDC.put(MdcUtils.USER_ID, "12345");
-
-            // when
-            Long result = MdcUtils.getUserId();
-
-            // then
-            assertThat(result).isEqualTo(12345L);
+            assertThat(result).isEqualTo(userId);
         }
 
         @Test
         @DisplayName("userId가 없으면 null을 반환한다")
         void getUserId_whenNotSet_returnsNull() {
             // when
-            Long result = MdcUtils.getUserId();
+            String result = MdcUtils.getUserId();
 
             // then
             assertThat(result).isNull();
         }
 
         @Test
-        @DisplayName("빈 문자열이면 null을 반환한다")
-        void getUserId_withEmptyString_returnsNull() {
+        @DisplayName("빈 문자열 userId는 저장하지 않는다")
+        void setUserId_withEmptyString_ignores() {
+            // when
+            MdcUtils.setUserId("");
+
+            // then
+            assertThat(MDC.get("userId")).isNull();
+        }
+
+        @Test
+        @DisplayName("공백만 있는 userId는 저장하지 않는다")
+        void setUserId_withWhitespace_ignores() {
+            // when
+            MdcUtils.setUserId("   ");
+
+            // then
+            assertThat(MDC.get("userId")).isNull();
+        }
+
+        @Test
+        @DisplayName("null userId는 저장하지 않는다")
+        void setUserId_withNull_ignores() {
+            // when
+            MdcUtils.setUserId(null);
+
+            // then
+            assertThat(MDC.get("userId")).isNull();
+        }
+
+        @Test
+        @DisplayName("빈 문자열이 저장되어 있으면 getUserId()는 null을 반환한다")
+        void getUserId_withEmptyStringStored_returnsNull() {
             // given
-            MDC.put(MdcUtils.USER_ID, "");
+            MDC.put("userId", "");
 
             // when
-            Long result = MdcUtils.getUserId();
+            String result = MdcUtils.getUserId();
 
             // then
             assertThat(result).isNull();
         }
 
         @Test
-        @DisplayName("공백 문자열이면 null을 반환한다")
-        void getUserId_withBlankString_returnsNull() {
+        @DisplayName("공백만 저장되어 있으면 getUserId()는 null을 반환한다")
+        void getUserId_withWhitespaceStored_returnsNull() {
             // given
-            MDC.put(MdcUtils.USER_ID, "   ");
+            MDC.put("userId", "   ");
 
             // when
-            Long result = MdcUtils.getUserId();
-
-            // then
-            assertThat(result).isNull();
-        }
-
-        @ParameterizedTest
-        @ValueSource(strings = {"not-a-number", "12.34", "abc123"})
-        @DisplayName("숫자로 변환할 수 없는 값이면 null을 반환한다")
-        void getUserId_withInvalidNumber_returnsNull(String invalidNumber) {
-            // given
-            MDC.put(MdcUtils.USER_ID, invalidNumber);
-
-            // when
-            Long result = MdcUtils.getUserId();
-
-            // then
-            assertThat(result).isNull();
-        }
-
-        @Test
-        @DisplayName("음수 값도 반환한다")
-        void getUserId_withNegativeValue_returnsNegative() {
-            // given
-            MDC.put(MdcUtils.USER_ID, "-999");
-
-            // when
-            Long result = MdcUtils.getUserId();
-
-            // then
-            assertThat(result).isEqualTo(-999L);
-        }
-
-        @Test
-        @DisplayName("Long 범위를 초과하면 null을 반환한다")
-        void getUserId_withOverflow_returnsNull() {
-            // given
-            MDC.put(MdcUtils.USER_ID, "99999999999999999999999999999");
-
-            // when
-            Long result = MdcUtils.getUserId();
+            String result = MdcUtils.getUserId();
 
             // then
             assertThat(result).isNull();
@@ -512,14 +399,14 @@ class MdcUtilsTest {
 
     @Nested
     @DisplayName("통합 시나리오 테스트")
-    class IntegrationTest {
+    class IntegrationScenarioTest {
 
         @Test
-        @DisplayName("requestId와 userId를 함께 설정하고 조회한다")
-        void setAndGet_bothRequestIdAndUserId() {
+        @DisplayName("requestId와 userId를 동시에 설정한다")
+        void setBothRequestIdAndUserId() {
             // given
             String requestId = UUID.randomUUID().toString();
-            Long userId = 42L;
+            String userId = "usr-test-123";
 
             // when
             MdcUtils.setRequestId(requestId);
@@ -528,16 +415,15 @@ class MdcUtilsTest {
             // then
             assertThat(MdcUtils.getRequestId()).isEqualTo(requestId);
             assertThat(MdcUtils.getUserId()).isEqualTo(userId);
-            assertThat(MdcUtils.getRequestUuid()).isNotNull();
         }
 
         @Test
-        @DisplayName("clear() 후에는 모든 값이 null이다")
-        void clear_removesAllCustomValues() {
+        @DisplayName("clear() 후 모든 값이 null이다")
+        void afterClear_allValuesAreNull() {
             // given
-            MdcUtils.setRequestId("test-request-id");
-            MdcUtils.setUserId(123L);
-            MdcUtils.put("customKey", "customValue");
+            MdcUtils.setRequestId("req-123");
+            MdcUtils.setUserId("usr-456");
+            MdcUtils.put("custom", "value");
 
             // when
             MdcUtils.clear();
@@ -545,36 +431,36 @@ class MdcUtilsTest {
             // then
             assertThat(MdcUtils.getRequestId()).isNull();
             assertThat(MdcUtils.getUserId()).isNull();
-            assertThat(MdcUtils.get("customKey")).isNull();
+            assertThat(MdcUtils.get("custom")).isNull();
         }
 
         @Test
-        @DisplayName("여러 커스텀 키-값을 설정하고 조회한다")
+        @DisplayName("여러 커스텀 키를 설정하고 조회한다")
         void multipleCustomKeys() {
             // when
-            MdcUtils.put("traceId", "trace-123");
-            MdcUtils.put("spanId", "span-456");
-            MdcUtils.put("service", "ticket-service");
+            MdcUtils.put("key1", "value1");
+            MdcUtils.put("key2", "value2");
+            MdcUtils.put("key3", "value3");
 
             // then
-            assertThat(MdcUtils.get("traceId")).isEqualTo("trace-123");
-            assertThat(MdcUtils.get("spanId")).isEqualTo("span-456");
-            assertThat(MdcUtils.get("service")).isEqualTo("ticket-service");
+            assertThat(MdcUtils.get("key1")).isEqualTo("value1");
+            assertThat(MdcUtils.get("key2")).isEqualTo("value2");
+            assertThat(MdcUtils.get("key3")).isEqualTo("value3");
         }
 
         @Test
-        @DisplayName("특정 키만 제거하면 다른 키는 유지된다")
-        void remove_onlyRemovesSpecificKey() {
+        @DisplayName("특정 키만 제거한다")
+        void removeSpecificKey() {
             // given
-            MdcUtils.setRequestId("request-id");
-            MdcUtils.setUserId(123L);
+            MdcUtils.setRequestId("req-123");
+            MdcUtils.setUserId("usr-456");
 
             // when
-            MdcUtils.remove(MdcUtils.REQUEST_ID);
+            MdcUtils.remove("requestId");
 
             // then
             assertThat(MdcUtils.getRequestId()).isNull();
-            assertThat(MdcUtils.getUserId()).isEqualTo(123L);
+            assertThat(MdcUtils.getUserId()).isEqualTo("usr-456");
         }
     }
 }

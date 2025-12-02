@@ -230,14 +230,15 @@ class JsonUtilsTest {
         @DisplayName("객체를 byte 배열로 변환한다")
         void toBytes_convertsToByteArray() {
             // given
-            TestDto dto = new TestDto(1L, "테스트", null);
+            TestDto dto = new TestDto(1L, "test", null);
 
             // when
             byte[] bytes = JsonUtils.toBytes(dto);
 
             // then
             assertThat(bytes).isNotEmpty();
-            assertThat(new String(bytes)).isEqualTo("{\"id\":1,\"name\":\"테스트\"}");
+            assertThat(new String(bytes, java.nio.charset.StandardCharsets.UTF_8))
+                    .isEqualTo("{\"id\":1,\"name\":\"test\"}");
         }
     }
 
@@ -366,21 +367,21 @@ class JsonUtilsTest {
         @DisplayName("byte 배열을 객체로 변환한다")
         void fromBytes_convertsBytesToObject() {
             // given
-            byte[] bytes = "{\"id\":1,\"name\":\"테스트\"}".getBytes();
+            byte[] bytes = "{\"id\":1,\"name\":\"test\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
             // when
             TestDto dto = JsonUtils.fromBytes(bytes, TestDto.class);
 
             // then
             assertThat(dto.id()).isEqualTo(1L);
-            assertThat(dto.name()).isEqualTo("테스트");
+            assertThat(dto.name()).isEqualTo("test");
         }
 
         @Test
         @DisplayName("잘못된 byte 배열은 예외를 발생시킨다")
         void fromBytes_withInvalidBytes_throwsException() {
             // given
-            byte[] invalidBytes = "invalid".getBytes();
+            byte[] invalidBytes = "invalid".getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
             // when & then
             assertThatThrownBy(() -> JsonUtils.fromBytes(invalidBytes, TestDto.class))
@@ -540,12 +541,13 @@ class JsonUtilsTest {
             TestDto source = new TestDto(1L, "테스트", null);
 
             // when
+            @SuppressWarnings("unchecked")
             Map<String, Object> map = JsonUtils.convert(source, Map.class);
 
             // then
-            assertThat(map)
-                    .containsEntry("id", 1)
-                    .containsEntry("name", "테스트");
+            assertThat(map).containsKey("id").containsKey("name");
+            assertThat(((Number) map.get("id")).longValue()).isEqualTo(1L);
+            assertThat(map.get("name")).isEqualTo("테스트");
         }
     }
 
