@@ -92,6 +92,9 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // 시큐리티 목 유저 추가
+    api 'org.springframework.security:spring-security-test'
 }
 
 tasks.named('test') {
