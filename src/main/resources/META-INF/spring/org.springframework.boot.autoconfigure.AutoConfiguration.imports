@@ -6,3 +6,4 @@ io.github.tickatch.common.autoconfig.MdcFilterAutoConfiguration
 io.github.tickatch.common.autoconfig.ScheduledTraceAutoConfiguration
 io.github.tickatch.common.autoconfig.SecurityAutoConfiguration
 io.github.tickatch.common.autoconfig.SwaggerAutoConfiguration
+io.github.tickatch.common.feign.FeignHeaderAutoConfiguration
