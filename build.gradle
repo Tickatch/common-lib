@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'io.github.tickatch'
-version = '0.0.4'
+version = '0.0.5'
 description = 'Tickatch Common Library - 공통 DTO, Exception, Event, Utility'
 
 java {

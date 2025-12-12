@@ -1,5 +1,6 @@
 package io.github.tickatch.common.logging;
 
+import io.github.tickatch.common.autoconfig.MdcFilterAutoConfiguration;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -92,6 +93,10 @@ public class MdcFilter extends OncePerRequestFilter {
         MdcUtils.setUserId(userId);
       }
 
+      // IpAddress 추출
+      String ip = extractClientIp(request);
+      MdcUtils.put("ipAddress", ip);
+
       // 3. 응답 헤더에 traceId 포함 (프론트엔드/디버깅용)
       response.setHeader(HEADER_TRACE_ID, traceId);
 
@@ -136,5 +141,30 @@ public class MdcFilter extends OncePerRequestFilter {
     }
 
     return userIdHeader;
+  }
+
+  /**
+   * 클라이언트의 실제 IP 주소를 추출한다.
+   *
+   * <p>API Gateway 또는 프록시 서버를 사용하는 경우,
+   * 원본 클라이언트 IP는 "X-Forwarded-For" 헤더에 포함된다.
+   * 헤더가 존재하면 첫 번째 IP 값을 사용한다.
+   *
+   * <p>프록시를 사용하지 않는 경우에는 HttpServletRequest의
+   * getRemoteAddr() 값을 그대로 사용한다.
+   *
+   * @param request 현재 HTTP 요청
+   * @return 클라이언트 IP 주소
+   */
+  private String extractClientIp(HttpServletRequest request) {
+    String forwarded = request.getHeader("X-Forwarded-For");
+
+    // 프록시나 게이트웨이를 거치는 경우: 헤더에 실제 클라이언트 IP가 존재
+    if (StringUtils.hasText(forwarded)) {
+      return forwarded.split(",")[0].trim(); // 첫 번째 IP가 원래 클라이언트 IP
+    }
+
+    // 직접 연결된 요청 또는 헤더가 없는 경우
+    return request.getRemoteAddr();
   }
 }
