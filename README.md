@@ -1,37 +1,18 @@
 # Tickatch Common Library
 
-Tickatch MSA 프로젝트를 위한 공통 라이브러리입니다.  
+Tickatch MSA 프로젝트를 위한 공통 라이브러리입니다.
+
 Spring Boot 3.x 기반의 API 응답 표준화, 예외 처리, 인증/인가, 로깅, 분산 추적, 이벤트 등을 제공합니다.
-
-## 📋 목차
-
-- [설치](#-설치)
-- [주요 기능](#-주요-기능)
-- [빠른 시작](#-빠른-시작)
-- [패키지 구조](#-패키지-구조)
-- [상세 사용법](#-상세-사용법)
-    - [API 응답](#api-응답)
-    - [예외 처리](#예외-처리)
-    - [인증/인가](#인증인가)
-    - [분산 추적](#분산-추적)
-    - [로깅](#로깅)
-    - [JPA Auditing](#jpa-auditing)
-    - [이벤트](#이벤트)
-    - [Swagger](#swagger)
-    - [유틸리티](#유틸리티)
-- [AutoConfiguration](#-autoconfiguration)
-- [설정 옵션](#-설정-옵션)
-- [커스터마이징](#-커스터마이징)
 
 ---
 
-## 📦 설치
+## 설치
 
 ### Gradle
 
 ```groovy
 dependencies {
-    implementation 'io.github.tickatch:common-lib:0.0.1'
+    implementation 'io.github.tickatch:common-lib:0.0.5'
 }
 ```
 
@@ -41,7 +22,7 @@ dependencies {
 <dependency>
     <groupId>io.github.tickatch</groupId>
     <artifactId>common-lib</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.5</version>
 </dependency>
 ```
 
@@ -52,7 +33,7 @@ dependencies {
 
 ---
 
-## ✨ 주요 기능
+## 주요 기능
 
 | 기능 | 설명 |
 |------|------|
@@ -68,7 +49,7 @@ dependencies {
 
 ---
 
-## 🚀 빠른 시작
+## 빠른 시작
 
 의존성만 추가하면 **AutoConfiguration**에 의해 자동으로 활성화됩니다.
 
@@ -98,7 +79,7 @@ INTERNAL_SERVER_ERROR=서버 오류가 발생했습니다.
 
 ---
 
-## 📁 패키지 구조
+## 패키지 구조
 
 ```
 io.github.tickatch.common/
@@ -114,8 +95,7 @@ io.github.tickatch.common/
 │   ├── LoggingAutoConfiguration.java
 │   ├── ExceptionHandlerAutoConfiguration.java
 │   ├── JpaAuditingAutoConfiguration.java
-│   ├── SwaggerAutoConfiguration.java
-│   └── NoRestControllerAdviceCondition.java
+│   └── SwaggerAutoConfiguration.java
 ├── error/         # 예외 처리
 │   ├── ErrorCode.java
 │   ├── GlobalErrorCode.java
@@ -139,9 +119,13 @@ io.github.tickatch.common/
 │   ├── MessageResolver.java
 │   └── DefaultMessageResolver.java
 ├── security/      # 인증/인가
+│   ├── UserType.java
 │   ├── AuthenticatedUser.java
 │   ├── LoginFilter.java
 │   └── BaseSecurityConfig.java
+├── security/test/ # 테스트 지원
+│   ├── MockUser.java
+│   └── WithMockUserSecurityContextFactory.java
 ├── swagger/       # API 문서
 │   └── SwaggerConfig.java
 └── util/          # 유틸리티
@@ -151,7 +135,7 @@ io.github.tickatch.common/
 
 ---
 
-## 📖 상세 사용법
+## 상세 사용법
 
 ### API 응답
 
@@ -227,8 +211,7 @@ public PageResponse<TicketDto> getTickets(Pageable pageable) {
 public enum TicketErrorCode implements ErrorCode {
     TICKET_NOT_FOUND(404, "TICKET_NOT_FOUND"),
     TICKET_SOLD_OUT(409, "TICKET_SOLD_OUT"),
-    SEAT_ALREADY_RESERVED(409, "SEAT_ALREADY_RESERVED"),
-    INVALID_TICKET_STATUS(422, "INVALID_TICKET_STATUS");
+    SEAT_ALREADY_RESERVED(409, "SEAT_ALREADY_RESERVED");
 
     private final int status;
     private final String code;
@@ -238,11 +221,9 @@ public enum TicketErrorCode implements ErrorCode {
 #### 메시지 정의 (messages.properties)
 
 ```properties
-# 티켓 서비스 에러
 TICKET_NOT_FOUND=티켓 {0}을(를) 찾을 수 없습니다.
 TICKET_SOLD_OUT={0} 공연의 티켓이 매진되었습니다.
 SEAT_ALREADY_RESERVED={0}구역 {1}번 좌석은 이미 예약되었습니다.
-INVALID_TICKET_STATUS=현재 상태({0})에서는 해당 작업을 수행할 수 없습니다.
 ```
 
 #### 예외 던지기
@@ -257,7 +238,7 @@ throw new BusinessException(TicketErrorCode.SEAT_ALREADY_RESERVED, "A", "15");
 // → "A구역 15번 좌석은 이미 예약되었습니다."
 
 // 원인 예외 포함
-throw new BusinessException(GlobalErrorCode.DATABASE_ERROR, e, "tickets");
+throw new BusinessException(GlobalErrorCode.DATABASE_ERROR, e, "users");
 ```
 
 **에러 응답 예시:**
@@ -269,25 +250,6 @@ throw new BusinessException(GlobalErrorCode.DATABASE_ERROR, e, "tickets");
     "message": "티켓 123을(를) 찾을 수 없습니다.",
     "status": 404,
     "path": "/api/tickets/123"
-  },
-  "timestamp": "2025-01-15T10:30:00Z"
-}
-```
-
-#### 검증 에러 응답 예시
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "입력값이 유효하지 않습니다.",
-    "status": 400,
-    "path": "/api/tickets",
-    "fields": [
-      { "field": "email", "value": "invalid", "reason": "이메일 형식이 올바르지 않습니다." },
-      { "field": "quantity", "value": -1, "reason": "1 이상이어야 합니다." }
-    ]
   },
   "timestamp": "2025-01-15T10:30:00Z"
 }
@@ -320,35 +282,45 @@ throw new BusinessException(GlobalErrorCode.DATABASE_ERROR, e, "tickets");
 
 ### 인증/인가
 
+#### 사용자 유형 (UserType)
+
+```java
+public enum UserType {
+    CUSTOMER("구매자"),   // → ROLE_CUSTOMER
+    SELLER("판매자"),     // → ROLE_SELLER
+    ADMIN("관리자");      // → ROLE_ADMIN
+}
+```
+
 #### 컨트롤러에서 현재 사용자 조회
 
 ```java
 @GetMapping("/me")
 public UserInfo getCurrentUser(@AuthenticationPrincipal AuthenticatedUser user) {
     Long userId = user.getUserId();
+    UserType userType = user.getUserType();
+    
+    if (userType.isAdmin()) {
+        // 관리자 전용 로직
+    }
+    
     return userService.findById(userId);
 }
 ```
 
-#### 서비스에서 현재 사용자 조회
+#### 권한 기반 접근 제어
 
 ```java
-@Service
-public class OrderService {
-    
-    public Order createOrder(OrderRequest request) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        AuthenticatedUser user = (AuthenticatedUser) auth.getPrincipal();
-        Long userId = user.getUserId();
-        
-        // 주문 생성 로직
-    }
-}
+@PreAuthorize("hasRole('SELLER')")
+@PostMapping("/products")
+public Product createProduct(@RequestBody ProductRequest request) { ... }
+
+@PreAuthorize("hasAnyRole('SELLER', 'ADMIN')")
+@GetMapping("/seller/stats")
+public SellerStats sellerStats() { ... }
 ```
 
-#### 커스텀 Security 설정 (선택)
-
-기본 설정을 변경하려면 `BaseSecurityConfig`를 상속:
+#### 커스텀 Security 설정
 
 ```java
 @Configuration
@@ -374,16 +346,6 @@ public class SecurityConfig extends BaseSecurityConfig {
             .requestMatchers("/admin/**").hasRole("ADMIN")
             .anyRequest().authenticated();
     }
-    
-    @Override
-    protected String[] defaultPermitAllPaths() {
-        return new String[]{
-            "/v3/api-docs/**",
-            "/swagger-ui/**",
-            "/actuator/health",
-            "/api/public/**"  // 추가 허용 경로
-        };
-    }
 }
 ```
 
@@ -393,8 +355,6 @@ AutoConfiguration이 기본으로 허용하는 경로:
 
 - `/v3/api-docs/**` - OpenAPI 문서
 - `/swagger-ui/**` - Swagger UI
-- `/swagger-ui.html` - Swagger UI
-- `/swagger-resources/**` - Swagger 리소스
 - `/actuator/health` - 헬스 체크
 - `/actuator/info` - 서비스 정보
 
@@ -404,16 +364,7 @@ AutoConfiguration이 기본으로 허용하는 경로:
 
 MSA 환경에서 여러 서비스를 거치는 요청의 전체 흐름을 추적할 수 있습니다.
 
-> 상세 가이드: [DISTRIBUTED_TRACING.md](./DISTRIBUTED_TRACING.md)
-
-#### 핵심 개념
-
-```
-traceId: 전체 요청 흐름을 식별하는 고유 ID (UUID)
-         하나의 사용자 요청이 여러 서비스를 거쳐도 동일한 traceId 유지
-```
-
-#### 트리거별 자동화
+#### 트리거별 동작
 
 | 트리거 | 담당 컴포넌트 | 동작 |
 |--------|-------------|------|
@@ -423,7 +374,6 @@ traceId: 전체 요청 흐름을 식별하는 고유 ID (UUID)
 | 이벤트 발행 | `IntegrationEvent.from()` | MDC에서 traceId 자동 추출 |
 | 이벤트 수신 | `EventContext.run()` | 이벤트에서 traceId 복원 **(수동 호출)** |
 | @Scheduled | `ScheduledTraceAutoConfiguration` | 새 traceId 자동 생성 |
-| 배치/수동 | `EventContext.runWithNewTrace()` | 새 traceId 생성 **(수동 호출)** |
 
 #### 전체 흐름
 
@@ -447,18 +397,13 @@ traceId: 전체 요청 흐름을 식별하는 고유 ID (UUID)
 모든 서비스 로그: [abc-123] ...
 ```
 
-#### 사용 예시
-
-**HTTP 요청 처리 (자동)**
+#### 이벤트 발행 (자동)
 
 ```java
 @PostMapping("/orders")
 public OrderResponse createOrder(@RequestBody OrderRequest request) {
     // MdcFilter가 이미 traceId 설정 완료
     log.info("주문 생성");  // [abc-123] 주문 생성
-    
-    // Feign 호출 - traceId 자동 전파
-    paymentClient.process(request.getPaymentInfo());
     
     // 이벤트 발행 - traceId 자동 포함
     IntegrationEvent event = IntegrationEvent.from(domainEvent, "order-service");
@@ -468,51 +413,17 @@ public OrderResponse createOrder(@RequestBody OrderRequest request) {
 }
 ```
 
-**이벤트 수신 (수동 호출 필요)**
+#### 이벤트 수신 (수동 호출 필요)
 
 ```java
 @RabbitListener(queues = "order.created.queue")
 public void handleOrderCreated(IntegrationEvent event) {
-    // ✅ EventContext.run()으로 MDC 복원
+    // EventContext.run()으로 MDC 복원
     EventContext.run(event, e -> {
         OrderCreatedEvent payload = e.getPayloadAs(OrderCreatedEvent.class);
         log.info("주문 이벤트 수신");  // [abc-123] 주문 이벤트 수신
         
-        // 새 이벤트 발행 시 같은 traceId 자동 유지
-        IntegrationEvent newEvent = IntegrationEvent.from(newDomainEvent, "payment-service");
-        rabbitTemplate.convertAndSend(exchange, newEvent.getRoutingKey(), newEvent);
-    });
-}
-```
-
-**스케줄러 (자동)**
-
-```java
-@Scheduled(cron = "0 0 2 * * *")
-public void dailyReport() {
-    // ScheduledTraceAutoConfiguration이 자동으로 traceId 생성
-    log.info("리포트 생성 시작");  // [sched-xxx-xxx] 리포트 생성 시작
-    
-    // Feign 호출, 이벤트 발행 모두 추적 가능
-    reportClient.fetchData();
-}
-```
-
-**배치/수동 작업**
-
-```java
-public void processBatch() {
-    // 명시적으로 새 traceId 생성
-    EventContext.runWithNewTrace(() -> {
-        log.info("배치 처리 시작");  // [batch-xxx-xxx] 배치 처리 시작
-        externalClient.call();
-    });
-}
-
-// 반환값이 필요한 경우
-public int processBatchWithResult() {
-    return EventContext.executeWithNewTrace(() -> {
-        return processItems();
+        // 처리 로직...
     });
 }
 ```
@@ -528,114 +439,6 @@ public int processBatchWithResult() {
 
 ---
 
-### 로깅
-
-#### logback.xml 설정
-
-```xml
-<configuration>
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{requestId}] [%X{userId}] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-    </root>
-</configuration>
-```
-
-#### 자동 로깅 (RestController)
-
-모든 RestController 메서드는 자동으로 로깅됩니다:
-
-```
-INFO  GET /api/tickets/123 - Request ID: abc-123, User ID: 42, Method: TicketController.getTicket, Params: {id: 123}
-INFO  GET /api/tickets/123 - Request ID: abc-123, User ID: 42, Method: TicketController.getTicket, Return: {"id":123}
-```
-
-#### 선택적 로깅 (@LogExecution)
-
-서비스 메서드에 선택적으로 로깅 적용:
-
-```java
-@Service
-public class PaymentService {
-
-    @LogExecution
-    public PaymentResult processPayment(PaymentRequest request) {
-        // 진입/종료 로그가 자동 기록됨
-        return result;
-    }
-}
-```
-
-#### MdcUtils 직접 사용
-
-```java
-// 현재 요청 ID (traceId) 조회
-String requestId = MdcUtils.getRequestId();
-
-// 요청 ID 존재 여부 확인
-boolean hasId = MdcUtils.hasRequestId();
-
-// 없으면 새로 생성
-String id = MdcUtils.getOrCreateRequestId();
-
-// 현재 사용자 ID 조회
-String userId = MdcUtils.getUserId();
-boolean hasUser = MdcUtils.hasUserId();
-
-// 커스텀 값 저장
-MdcUtils.put("orderId", orderId);
-String orderId = MdcUtils.get("orderId");
-
-// MDC 정리
-MdcUtils.clear();
-```
-
----
-
-### JPA Auditing
-
-#### 엔티티에서 사용
-
-```java
-@Entity
-@Table(name = "orders")
-@EntityListeners(AuditingEntityListener.class)
-public class Order {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private String productName;
-
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
-    @CreatedBy
-    @Column(name = "created_by", updatable = false)
-    private String createdBy;  // 자동으로 현재 userId 설정
-
-    @LastModifiedBy
-    @Column(name = "updated_by")
-    private String updatedBy;  // 자동으로 현재 userId 설정
-}
-```
-
-> **Note:** `AuditorAwareImpl`이 자동 등록되어 `SecurityContext`에서 현재 사용자 ID를 추출합니다.  
-> 인증되지 않은 요청은 `"SYSTEM"`으로 설정됩니다.
-
----
-
 ### 이벤트
 
 #### 도메인 이벤트 정의
@@ -646,13 +449,11 @@ public class TicketCreatedEvent extends DomainEvent {
     
     private final Long ticketId;
     private final String eventName;
-    private final int quantity;
 
-    public TicketCreatedEvent(Long ticketId, String eventName, int quantity) {
+    public TicketCreatedEvent(Long ticketId, String eventName) {
         super();
         this.ticketId = ticketId;
         this.eventName = eventName;
-        this.quantity = quantity;
     }
 
     @Override
@@ -679,15 +480,8 @@ public class TicketService {
     public Ticket createTicket(TicketRequest request) {
         Ticket ticket = ticketRepository.save(new Ticket(request));
         
-        // 도메인 이벤트 생성
-        TicketCreatedEvent domainEvent = new TicketCreatedEvent(
-            ticket.getId(), 
-            request.getEventName(), 
-            request.getQuantity()
-        );
-        
-        // 통합 이벤트로 래핑하여 발행
-        // ✅ traceId는 MDC에서 자동 추출됨 (명시적 전달 불필요)
+        // 도메인 이벤트 → 통합 이벤트
+        TicketCreatedEvent domainEvent = new TicketCreatedEvent(ticket.getId(), request.getEventName());
         IntegrationEvent event = IntegrationEvent.from(domainEvent, "ticket-service");
         
         rabbitTemplate.convertAndSend("ticket.exchange", event.getRoutingKey(), event);
@@ -697,74 +491,109 @@ public class TicketService {
 }
 ```
 
-#### 이벤트 수신
-
-```java
-@Component
-@RequiredArgsConstructor
-public class TicketEventListener {
-
-    @RabbitListener(queues = "ticket.created.queue")
-    public void handleTicketCreated(IntegrationEvent event) {
-        // ✅ EventContext.run()으로 traceId 복원 필수!
-        EventContext.run(event, e -> {
-            TicketCreatedEvent payload = e.getPayloadAs(TicketCreatedEvent.class);
-            log.info("티켓 생성 이벤트 수신: ticketId={}", payload.getTicketId());
-            
-            // 후속 처리...
-            
-            // 새 이벤트 발행 시 같은 traceId 자동 유지
-            IntegrationEvent newEvent = IntegrationEvent.from(
-                new NotificationEvent(payload.getTicketId()),
-                "notification-service"
-            );
-            rabbitTemplate.convertAndSend(exchange, newEvent.getRoutingKey(), newEvent);
-        });
-    }
-    
-    // 반환값이 필요한 경우
-    @RabbitListener(queues = "ticket.query.queue")
-    public String handleTicketQuery(IntegrationEvent event) {
-        return EventContext.execute(event, e -> {
-            TicketQueryEvent payload = e.getPayloadAs(TicketQueryEvent.class);
-            return ticketService.getStatus(payload.getTicketId());
-        });
-    }
-}
-```
-
 #### IntegrationEvent 기능
 
 ```java
-// 명시적 traceId 지정 (MDC 대신)
-IntegrationEvent event = IntegrationEvent.from(domainEvent, "service", "custom-trace-id");
-
 // TTL 설정
 IntegrationEvent event = IntegrationEvent.createWithTtl(
-    "TicketCreated", 
-    "ticket-service", 
-    payload, 
-    "ticket.created",
-    3600  // 1시간 후 만료
+    "TicketCreated", "ticket-service", payload, "ticket.created", 3600
 );
 
 // 만료 확인
-if (event.isExpired()) {
-    // 만료된 이벤트 처리
-}
+if (event.isExpired()) { ... }
 
 // 재시도
 if (event.canRetry()) {
     IntegrationEvent retryEvent = event.retry();
-    // retryCount가 증가된 이벤트 재발행
 }
 ```
 
 ---
 
+### 로깅
+
+#### logback.xml 설정
+
+```xml
+<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{requestId}] [%X{userId}] %-5level %logger{36} - %msg%n</pattern>
+```
+
+#### 자동 로깅 (RestController)
+
+모든 RestController 메서드는 자동으로 로깅됩니다:
+
+```
+INFO  GET /api/tickets/123 - Request ID: abc-123, User ID: 42, Method: TicketController.getTicket, Params: {id: 123}
+INFO  GET /api/tickets/123 - Request ID: abc-123, User ID: 42, Method: TicketController.getTicket, Return: {"id":123}
+```
+
+#### 선택적 로깅 (@LogExecution)
+
+```java
+@Service
+public class PaymentService {
+
+    @LogExecution
+    public PaymentResult processPayment(PaymentRequest request) {
+        // 진입/종료 로그가 자동 기록됨
+        return result;
+    }
+}
+```
+
+#### MdcUtils 직접 사용
+
+```java
+// 현재 요청 ID (traceId) 조회
+String requestId = MdcUtils.getRequestId();
+
+// 요청 ID 존재 여부 확인
+boolean hasId = MdcUtils.hasRequestId();
+
+// 현재 사용자 ID 조회
+String userId = MdcUtils.getUserId();
+
+// 커스텀 값 저장
+MdcUtils.put("orderId", orderId);
+
+// MDC 정리
+MdcUtils.clear();
+```
+
+---
+
+### JPA Auditing
+
+#### 엔티티에서 사용
+
+```java
+@Entity
+@EntityListeners(AuditingEntityListener.class)
+public class Order {
+
+    @CreatedDate
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+
+    @CreatedBy
+    @Column(updatable = false)
+    private String createdBy;  // 자동으로 현재 userId 설정
+
+    @LastModifiedBy
+    private String updatedBy;  // 자동으로 현재 userId 설정
+}
+```
+
+> **Note:** 인증되지 않은 요청은 `"SYSTEM"`으로 설정됩니다.
+
+---
+
 ### Swagger
 
-#### 설정 (application.yml)
+#### 설정
 
 ```yaml
 openapi:
@@ -780,10 +609,6 @@ openapi:
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 
-#### JWT 인증
-
-Swagger UI에서 "Authorize" 버튼을 클릭하고 JWT 토큰을 입력하면 모든 API 요청에 자동으로 Bearer 토큰이 포함됩니다.
-
 ---
 
 ### 유틸리티
@@ -794,25 +619,15 @@ Swagger UI에서 "Authorize" 버튼을 클릭하고 JWT 토큰을 입력하면 �
 // Object → JSON
 String json = JsonUtils.toJson(ticket);
 String prettyJson = JsonUtils.toPrettyJson(ticket);
-byte[] bytes = JsonUtils.toBytes(ticket);
 
 // JSON → Object
 Ticket ticket = JsonUtils.fromJson(json, Ticket.class);
-Ticket ticket = JsonUtils.fromBytes(bytes, Ticket.class);
-
-// JSON → Collection
-List<Ticket> tickets = JsonUtils.fromJsonToList(json, Ticket.class);
-Map<String, Object> map = JsonUtils.fromJsonToMap(json);
 
 // 안전한 변환 (예외 대신 Optional)
-Optional<String> jsonOpt = JsonUtils.toJsonSafe(ticket);
 Optional<Ticket> ticketOpt = JsonUtils.fromJsonSafe(json, Ticket.class);
 
 // JSON 유효성 검사
 boolean valid = JsonUtils.isValidJson(json);
-
-// 객체 변환
-TicketDto dto = JsonUtils.convert(ticket, TicketDto.class);
 ```
 
 #### UuidUtils
@@ -822,36 +637,52 @@ TicketDto dto = JsonUtils.convert(ticket, TicketDto.class);
 String uuid = UuidUtils.generate();           // "550e8400-e29b-41d4-a716-446655440000"
 String compact = UuidUtils.generateCompact(); // "550e8400e29b41d4a716446655440000"
 
-// UUID 검증
-boolean valid = UuidUtils.isValid(uuid);
-boolean validAny = UuidUtils.isValidAnyFormat(compactUuid);
-UUID parsed = UuidUtils.parse(uuid);
-
-// 형식 변환
-String standard = UuidUtils.toStandardFormat(compactUuid);
-String compact = UuidUtils.toCompactFormat(uuid);
-
 // 도메인 ID 생성
 String ticketId = UuidUtils.generateTicketId();      // "TKT-a1b2c3d4"
 String orderId = UuidUtils.generateOrderId();        // "ORD-20250115103000-a1b2c3"
 String paymentId = UuidUtils.generatePaymentId();    // "PAY-20250115103000-d4e5f6"
 String userId = UuidUtils.generateUserId();          // "USR-a1b2c3d4"
-String eventId = UuidUtils.generateEventId();        // "EVT-a1b2c3d4"
-String reservationId = UuidUtils.generateReservationId(); // "RSV-20250115103000-a1b2c3"
 
 // 커스텀 도메인 ID
 String customId = UuidUtils.generateDomainId("ITEM");       // "ITEM-a1b2c3d4"
-String longId = UuidUtils.generateDomainId("ITEM", 12);     // "ITEM-a1b2c3d4e5f6"
 String timestampId = UuidUtils.generateTimestampId("LOG");  // "LOG-20250115103000-a1b2c3"
 
 // 도메인 ID 검증
-boolean validDomain = UuidUtils.isValidDomainId("TKT-a1b2c3d4", "TKT");
-String prefix = UuidUtils.extractPrefix("TKT-a1b2c3d4");  // "TKT"
+boolean valid = UuidUtils.isValidDomainId("TKT-a1b2c3d4", "TKT");
 ```
 
 ---
 
-## ⚙️ AutoConfiguration
+### 테스트 지원
+
+#### @MockUser 어노테이션
+
+```java
+// 기본 사용자 (CUSTOMER)
+@Test
+@MockUser(userId = "testUser")
+void testCustomerAccess() {
+    // SecurityContext에 ROLE_CUSTOMER 권한 설정됨
+}
+
+// 판매자 권한으로 테스트
+@Test
+@MockUser(userId = "seller123", userType = UserType.SELLER)
+void testSellerAccess() {
+    // SecurityContext에 ROLE_SELLER 권한 설정됨
+}
+
+// 관리자 권한으로 테스트
+@Test
+@MockUser(userId = "admin", userType = UserType.ADMIN)
+void testAdminAccess() {
+    // SecurityContext에 ROLE_ADMIN 권한 설정됨
+}
+```
+
+---
+
+## AutoConfiguration
 
 의존성 추가만으로 자동 활성화되는 기능들:
 
@@ -862,16 +693,15 @@ String prefix = UuidUtils.extractPrefix("TKT-a1b2c3d4");  // "TKT"
 | `FeignTraceAutoConfiguration` | spring-cloud-openfeign 존재 | `RequestInterceptor` | - |
 | `ScheduledTraceAutoConfiguration` | spring-aop 존재 | `ScheduledTraceAspect` | - |
 | `LoggingAutoConfiguration` | Servlet 웹앱 | `LoggingAspect`, `LogManager` | `tickatch.logging.enabled=false` |
-| `ExceptionHandlerAutoConfiguration` | Servlet 웹앱 | `GlobalExceptionHandler`, `MessageResolver` | 직접 `@RestControllerAdvice` 정의 |
-| `JpaAuditingAutoConfiguration` | spring-data-jpa 존재 | `AuditorAware`, `@EnableJpaAuditing` | `tickatch.jpa.auditing.enabled=false` |
-| `SwaggerAutoConfiguration` | springdoc-openapi 존재 | `SwaggerConfig`, `OpenAPI` | `tickatch.swagger.enabled=false` |
+| `ExceptionHandlerAutoConfiguration` | Servlet 웹앱 | `GlobalExceptionHandler` | 직접 `@RestControllerAdvice` 정의 |
+| `JpaAuditingAutoConfiguration` | spring-data-jpa 존재 | `AuditorAware` | `tickatch.jpa.auditing.enabled=false` |
+| `SwaggerAutoConfiguration` | springdoc-openapi 존재 | `SwaggerConfig` | `tickatch.swagger.enabled=false` |
 
 ---
 
-## 🔧 설정 옵션
+## 설정 옵션
 
 ```yaml
-# application.yml
 tickatch:
   logging:
     enabled: true        # 로깅 AutoConfiguration (기본: true)
@@ -898,7 +728,7 @@ openapi:
 
 ---
 
-## 🎨 커스터마이징
+## 커스터마이징
 
 ### 커스텀 예외 처리기
 
@@ -910,16 +740,11 @@ public class CustomExceptionHandler extends GlobalExceptionHandler {
         super(messageResolver);
     }
 
-    // 도메인별 예외 핸들러 추가
     @ExceptionHandler(PaymentFailedException.class)
     public ResponseEntity<ApiResponse<Void>> handlePaymentFailed(
             PaymentFailedException e, 
             HttpServletRequest request) {
-        
-        // 외부 결제 시스템에 알림 전송
-        paymentAlertService.sendAlert(e);
-        
-        return buildErrorResponse(e.getErrorCode(), request);
+        // 커스텀 처리
     }
 }
 ```
@@ -929,14 +754,7 @@ public class CustomExceptionHandler extends GlobalExceptionHandler {
 ```java
 @Bean
 public AuditorAware<String> auditorAware() {
-    return () -> {
-        // 커스텀 로직으로 감사자 결정
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
-            return Optional.of("BATCH_JOB");
-        }
-        // ...
-    };
+    return () -> Optional.of("BATCH_JOB");
 }
 ```
 
@@ -945,48 +763,8 @@ public AuditorAware<String> auditorAware() {
 ```java
 @Bean
 public MessageResolver messageResolver() {
-    return (code, args) -> {
-        // 외부 메시지 서비스에서 조회
-        return externalMessageService.getMessage(code, args);
-    };
+    return (code, args) -> externalMessageService.getMessage(code, args);
 }
 ```
 
-### 커스텀 Security 설정
-
-```java
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig extends BaseSecurityConfig {
-
-    @Bean
-    @Override
-    protected LoginFilter loginFilterBean() {
-        return new LoginFilter();
-    }
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return build(http);
-    }
-
-    @Override
-    protected Customizer<AuthorizeHttpRequestsConfigurer<HttpSecurity>
-            .AuthorizationManagerRequestMatcherRegistry> authorizeHttpRequests() {
-        return registry -> registry
-            .requestMatchers("/public/**").permitAll()
-            .requestMatchers("/admin/**").hasRole("ADMIN")
-            .anyRequest().authenticated();
-    }
-
-    @Override
-    protected AuthenticationEntryPoint authenticationEntryPoint() {
-        return (request, response, authException) -> {
-            // JSON 형식으로 401 응답
-            response.setContentType("application/json");
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("{\"error\":\"Unauthorized\"}");
-        };
-    }
-}
-```
+---
